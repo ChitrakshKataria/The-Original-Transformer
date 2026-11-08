@@ -91,29 +91,20 @@ class CasualMultiHeadAttention(nn.Module):
 
 class Encoder(nn.Module):
     def __init__(self, d_model: int, vocab_size: int, seq_len: int, num_heads: int, dropout: float) -> None:
-        self.inputEmbeding = inputEmbeding(d_model=d_model, voca_size=vocab_size)
-        self.positionalEncoding = PositionalEncoding(seq_len=seq_len, d_model=d_model)
-
         self.MHA = MultiHeadAttention(d_model=d_model, num_heads=num_heads, dropout=dropout)
         self.nrom1 = LayerNorm(d_model=d_model)
 
         self.ffn = FeedForwardNetwork(input_dim=d_model, dropout=dropout)
         self.norm2 = LayerNorm(d_model=d_model)
     def forward(self, x):
-        x = self.inputEmbeding(x)
-        x = self.positionalEncoding(x)
-
         x = self.norm1(x + self.MHA(x))
         x = self.norm2(x + self.ffn(x))
 
         return x
 
 class Decoder(nn.Module):
-    def __init__(self, d_model: int, vocab_size: int, num_heads: int, dropout: float, seq_len: int, encoder_output: torch.Tensor) -> None:
+    def __init__(self, d_model: int, vocab_size: int, num_heads: int, dropout: float, seq_len: int) -> None:
         super().__init__()
-        self.outputEmbeding = inputEmbeding(d_model=d_model, voca_size=vocab_size)
-        self.positionalEncoding =  PositionalEncoding(seq_len=seq_len, d_model=d_model)
-
         self.CMHA = CasualMultiHeadAttention(d_model=d_model, num_heads=num_heads, dropout=dropout)
         self.norm1 = LayerNorm(d_model=d_model)
 
@@ -123,8 +114,6 @@ class Decoder(nn.Module):
         self.ffn = FeedForwardNetwork(input_dim=d_model, dropout=dropout)
         self.norm2 = LayerNorm(d_model=d_model)
     def forward(self, x, encoder_output):
-        shifted_x = x[:, 1:] #Crucial for the teacher forcing meathod
-        x = self.outputEmbeding(shifted_x)
         x = self.positionalEncoding(x)
 
         x = self.norm1(x + self.CMHA(x))
@@ -132,10 +121,55 @@ class Decoder(nn.Module):
         x = self.norm3(x + self.ffn(x))
         return x
 
+class Transformer(nn.Module):
+    def __init__(self, num_encoder: int, num_decoder: int, d_model: int, vocab_size: int, seq_len: int, num_heads: int, dropout: int) -> None:
+        super().__init__()
+        self.num_encoder = num_encoder
+        self.num_decoder = num_decoder
+
+        self.inputEmbeding = inputEmbeding(d_model=d_model, voca_size=vocab_size)
+        self.outputEmbeding = inputEmbeding(d_model, vocab_size)
+        self.positionalEncoding = PositionalEncoding(seq_len=seq_len, d_model=d_model)
+
+
+        self.encoders = nn.ModuleList()
+        self.decoders = nn.ModuleList()
+        for i in range(num_encoder):
+            self.encoders.append(Encoder(d_model=d_model, num_heads=num_heads, vocab_size=vocab_size, dropout=dropout, seq_len=seq_len))
+
+        for i in range(num_decoder):
+            self.decoders.append(Decoder(seq_len=seq_len, d_model=d_model, num_heads=num_heads, dropout=dorpout, vocab_size=vocab_size))
+
+        self.linear = nn.Linear(in_features=d_model, out_features=vocab_size)
+    def forward(self, x, y):
+        ## Embedings
+        x = self.inputEmbeding(x)
+        x = self.positionalEncoding(x)
+
+        y = self.inputEmbeding(y)
+        y = self.positionalEncoding(y[:, :-1]) # Shift is important for teacher forcing meathod
+        ## Encoder
+        for encoder in self.encoders:
+            x = self.encoder(x)
+        for decoder in self.decoders:
+            y = decoder(x, y)
+
+        return self.linear(y)
+
 
 ### Defining the tokenizer
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-global_vocab_size = tokenizer.vocab_size
 
 
 ### Hyperparamaters
+seq_len = 128
+d_model = 256
+batch_size = 8
+num_heads = 4
+dorpout = 0.1
+lr = 3e-4
+num_epochs = 20
+
+num_encoder_blocks = 2
+num_decoder_block = 2
+global_vocab_size = tokenizer.vocab_size
