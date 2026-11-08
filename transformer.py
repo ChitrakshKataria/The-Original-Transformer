@@ -67,6 +67,7 @@ class FeedForwardNetwork(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads: int, d_model: int, dropout: float) -> None:
+        super().__init__()
         self.num_heads = num_heads
         self.d_model = d_model
         self.dropout = nn.Dropout(dropout)
@@ -93,11 +94,10 @@ class Encoder(nn.Module):
         x = self.inputEmbeding(x)
         x = self.positionalEncoding(x)
 
-        attn = self.MHA(x)
-        x = self.nor1(x) + attn
+        x = self.norm1(x + self.MHA(x))
+        x = self.norm2(x + self.ffn(x))
 
-        ffn = self.ffn(x)
-        x = self.norm2(x) + ffn
+        return x
 
 
 ### Defining the tokenizer
