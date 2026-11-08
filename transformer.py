@@ -24,7 +24,7 @@ class PositionalEncoding(nn.Module):
         self.seq_len = seq_len
         self.d_model = d_model
         pe = torch.zeros(seq_len, d_model)
-        pos = torch.arange(0, seq_len, dtype=torch.long)
+        pos = torch.arange(0, seq_len, dtype=torch.float32).unsqueeze(dim=1)
         formula = pos * torch.exp(
             torch.arange(0, d_model, 2) * -math.log(10000.0) / d_model
         )
@@ -74,6 +74,7 @@ class MultiHeadAttention(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         attn_output, _ = self.MHA(x,x,x, need_weights=False)
         return self.dropout(attn_output)
+
 
 
 
