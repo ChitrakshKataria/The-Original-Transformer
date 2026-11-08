@@ -5,3 +5,9 @@ Everything in this repo was buildt without the use of AI, Artificial Intelegence
 ## Techstack
 - Python - (Pytorch as framework)
 - OpenAI tiktoken tokenizer - (Hugging Face: GPT2Tokenizer)
+
+
+## Architecture
+- Paramaters: COMMING SOON
+- Activatoin: ReLU
+- Positional Endocing: Sinusoidal

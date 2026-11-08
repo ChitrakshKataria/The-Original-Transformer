@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import math
 
 import torch
@@ -16,7 +17,6 @@ class inputEmbeding(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.embeding(x)
         return x * math.sqrt(self.d_model)
-
 
 class PositionalEncoding(nn.Module):
     def __init__(self, seq_len: int, d_model: int):
@@ -49,10 +49,10 @@ class LayerNorm(nn.Module):
         return x
 
 class FeedForwardNetwork(nn.Module):
-    def __init__(self, input_dim: int, dorpout: float) -> None:
+    def __init__(self, input_dim: int, dropout: float) -> None:
         super().__init__()
         self.input_dim = input_dim
-        self.dropout = nn.Dropout(dorpout)
+        self.dropout = nn.Dropout(dropout)
 
         self.layer1 = nn.Linear(in_features=input_dim, out_features=4 * input_dim)
         self.activation = nn.ReLU()
@@ -65,26 +65,43 @@ class FeedForwardNetwork(nn.Module):
         x = self.layer2(x)
         return self.dropout(x)
 
+class MultiHeadAttention(nn.Module):
+    def __init__(self, num_heads: int, d_model: int, dropout: float) -> None:
+        self.num_heads = num_heads
+        self.d_model = d_model
+        self.dropout = nn.Dropout(dropout)
+        self.MHA = nn.MultiheadAttention(num_heads=num_heads, embed_dim=d_model, dropout=dropout, batch_first=True)
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        attn_output, _ = self.MHA(x,x,x, need_weights=False)
+        return self.dropout(attn_output)
+
 
 
 
 class Encoder(nn.Module):
-    def __init__(
-        self,
-    ) -> None:
-        self.inputEmbeding = InputEmbeding()
-        self.positionalEncoding = PositionalEncoding()
+    def __init__(self, d_model: int, vocab_size: int, seq_len: int, num_heads: int, dropout: float) -> None:
+        self.inputEmbeding = inputEmbeding(d_model=d_model, voca_size=vocab_size)
+        self.positionalEncoding = PositionalEncoding(seq_len=seq_len, d_model=d_model)
 
-        self.MHA = MultiHeadAttention()
-        self.nrom1 = LayerNorm()
+        self.MHA = MultiHeadAttention(d_model=d_model, num_heads=num_heads, dropout=dropout)
+        self.nrom1 = LayerNorm(d_model=d_model)
 
-        self.ffn = FeedForwardNetwork()
-        self.norm2 = LayerNorm()
+        self.ffn = FeedForwardNetwork(input_dim=d_model, dropout=dropout)
+        self.norm2 = LayerNorm(d_model=d_model)
+    def forward(self, x):
+        x = self.inputEmbeding(x)
+        x = self.positionalEncoding(x)
 
-    def forward(self, x) -> torch.Tensor:
-        pass
+        attn = self.MHA(x)
+        x = self.nor1(x) + attn
+
+        ffn = self.ffn(x)
+        x = self.norm2(x) + ffn
 
 
 ### Defining the tokenizer
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 global_vocab_size = tokenizer.vocab_size()
+
+
+### Hyperparamaters
