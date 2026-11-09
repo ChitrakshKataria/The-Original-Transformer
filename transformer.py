@@ -6,7 +6,6 @@ from transformers import GPT2Tokenizer
 
 
 class inputEmbeding(nn.Module):
-
     def __init__(self, d_model: int, voca_size: int):
         super().__init__()
         self.d_model = d_model
@@ -16,6 +15,7 @@ class inputEmbeding(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.embeding(x)
         return x * math.sqrt(self.d_model)
+
 
 class PositionalEncoding(nn.Module):
     def __init__(self, seq_len: int, d_model: int):
@@ -43,9 +43,11 @@ class LayerNorm(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.Norm = nn.LayerNorm(normalized_shape=d_model)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.Norm(x)
         return x
+
 
 class FeedForwardNetwork(nn.Module):
     def __init__(self, input_dim: int, dropout: float) -> None:
@@ -57,6 +59,7 @@ class FeedForwardNetwork(nn.Module):
         self.activation = nn.ReLU()
 
         self.layer2 = nn.Linear(in_features=4 * input_dim, out_features=input_dim)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.layer1(x)
         x = self.activation(x)
@@ -64,23 +67,31 @@ class FeedForwardNetwork(nn.Module):
         x = self.layer2(x)
         return self.dropout(x)
 
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, num_heads: int, d_model: int, dropout: float) -> None:
         super().__init__()
         self.num_heads = num_heads
         self.d_model = d_model
         self.dropout = nn.Dropout(dropout)
-        self.MHA = nn.MultiheadAttention(num_heads=num_heads, embed_dim=d_model, dropout=dropout, batch_first=True)
+        self.MHA = nn.MultiheadAttention(
+            num_heads=num_heads, embed_dim=d_model, dropout=dropout, batch_first=True
+        )
+
     def forward(self, q, k, v) -> torch.Tensor:
         attn_output, _ = self.MHA(q, k, v, need_weights=False)
         return self.dropout(attn_output)
+
 
 class CasualMultiHeadAttention(nn.Module):
     def __init__(self, num_heads: int, dropout: float, d_model: int) -> None:
         self.num_heads = num_heads
         self.dropout = nn.Dropout(dropout)
         self.d_model = d_model
-        self.CMHA = nn.MultiheadAttention(num_heads=num_heads, embed_dim=d_model, dropout=dropout, batch_first=True)
+        self.CMHA = nn.MultiheadAttention(
+            num_heads=num_heads, embed_dim=d_model, dropout=dropout, batch_first=True
+        )
+
     def forward(self, x):
         seq_len = x.size(1)
         mask = torch.triu(torch.ones(seq_len, seq_len, dtype=torch.bool), diagonal=1)
@@ -88,41 +99,75 @@ class CasualMultiHeadAttention(nn.Module):
         return self.dropout(attn_output)
 
 
-
 class Encoder(nn.Module):
-    def __init__(self, d_model: int, vocab_size: int, seq_len: int, num_heads: int, dropout: float) -> None:
-        self.MHA = MultiHeadAttention(d_model=d_model, num_heads=num_heads, dropout=dropout)
+    def __init__(
+        self,
+        d_model: int,
+        vocab_size: int,
+        seq_len: int,
+        num_heads: int,
+        dropout: float,
+    ) -> None:
+        self.MHA = MultiHeadAttention(
+            d_model=d_model, num_heads=num_heads, dropout=dropout
+        )
         self.nrom1 = LayerNorm(d_model=d_model)
 
         self.ffn = FeedForwardNetwork(input_dim=d_model, dropout=dropout)
         self.norm2 = LayerNorm(d_model=d_model)
+
     def forward(self, x):
         x = self.norm1(x + self.MHA(x))
         x = self.norm2(x + self.ffn(x))
 
         return x
 
+
 class Decoder(nn.Module):
-    def __init__(self, d_model: int, vocab_size: int, num_heads: int, dropout: float, seq_len: int) -> None:
+    def __init__(
+        self,
+        d_model: int,
+        vocab_size: int,
+        num_heads: int,
+        dropout: float,
+        seq_len: int,
+    ) -> None:
         super().__init__()
-        self.CMHA = CasualMultiHeadAttention(d_model=d_model, num_heads=num_heads, dropout=dropout)
+        self.CMHA = CasualMultiHeadAttention(
+            d_model=d_model, num_heads=num_heads, dropout=dropout
+        )
         self.norm1 = LayerNorm(d_model=d_model)
 
-        self.crossMultiHeadAttention = MultiHeadAttention(d_model=d_model, num_heads=num_heads, dropout=dropout)
+        self.crossMultiHeadAttention = MultiHeadAttention(
+            d_model=d_model, num_heads=num_heads, dropout=dropout
+        )
         self.norm2 = LayerNorm(d_model=d_model)
 
         self.ffn = FeedForwardNetwork(input_dim=d_model, dropout=dropout)
         self.norm2 = LayerNorm(d_model=d_model)
+
     def forward(self, x, encoder_output):
         x = self.positionalEncoding(x)
 
         x = self.norm1(x + self.CMHA(x))
-        x = self.norm2(x + self.crossMultiHeadAttention(x, encoder_output, encoder_output))
+        x = self.norm2(
+            x + self.crossMultiHeadAttention(x, encoder_output, encoder_output)
+        )
         x = self.norm3(x + self.ffn(x))
         return x
 
+
 class Transformer(nn.Module):
-    def __init__(self, num_encoder: int, num_decoder: int, d_model: int, vocab_size: int, seq_len: int, num_heads: int, dropout: int) -> None:
+    def __init__(
+        self,
+        num_encoder: int,
+        num_decoder: int,
+        d_model: int,
+        vocab_size: int,
+        seq_len: int,
+        num_heads: int,
+        dropout: float,
+    ) -> None:
         super().__init__()
         self.num_encoder = num_encoder
         self.num_decoder = num_decoder
@@ -131,23 +176,41 @@ class Transformer(nn.Module):
         self.outputEmbeding = inputEmbeding(d_model, vocab_size)
         self.positionalEncoding = PositionalEncoding(seq_len=seq_len, d_model=d_model)
 
-
         self.encoders = nn.ModuleList()
         self.decoders = nn.ModuleList()
         for i in range(num_encoder):
-            self.encoders.append(Encoder(d_model=d_model, num_heads=num_heads, vocab_size=vocab_size, dropout=dropout, seq_len=seq_len))
+            self.encoders.append(
+                Encoder(
+                    d_model=d_model,
+                    num_heads=num_heads,
+                    vocab_size=vocab_size,
+                    dropout=dropout,
+                    seq_len=seq_len,
+                )
+            )
 
         for i in range(num_decoder):
-            self.decoders.append(Decoder(seq_len=seq_len, d_model=d_model, num_heads=num_heads, dropout=dorpout, vocab_size=vocab_size))
+            self.decoders.append(
+                Decoder(
+                    seq_len=seq_len,
+                    d_model=d_model,
+                    num_heads=num_heads,
+                    dropout=dorpout,
+                    vocab_size=vocab_size,
+                )
+            )
 
         self.linear = nn.Linear(in_features=d_model, out_features=vocab_size)
+
     def forward(self, x, y):
         ## Embedings
         x = self.inputEmbeding(x)
         x = self.positionalEncoding(x)
 
         y = self.inputEmbeding(y)
-        y = self.positionalEncoding(y[:, :-1]) # Shift is important for teacher forcing meathod
+        y = self.positionalEncoding(
+            y[:, :-1]
+        )  # Shift is important for teacher forcing meathod
         ## Encoder
         for encoder in self.encoders:
             x = self.encoder(x)
@@ -166,10 +229,21 @@ seq_len = 128
 d_model = 256
 batch_size = 8
 num_heads = 4
-dorpout = 0.1
+dropout = 0.1
 lr = 3e-4
 num_epochs = 20
 
 num_encoder_blocks = 2
 num_decoder_block = 2
 global_vocab_size = tokenizer.vocab_size
+
+
+model = Transformer(
+    num_encoder=num_encoder_blocks,
+    num_decoder=num_decoder_block,
+    d_model=d_model,
+    vocab_size=global_vocab_size,
+    seq_len=seq_len,
+    num_heads=num_heads,
+    dropout=dropout
+)
